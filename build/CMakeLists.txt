@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 2.8)  
+PROJECT(libnetwork)  
+SET(SRC_LIST ../libnetwork.c)  
+SET(SENDMAV_BINARY_DIR ../)
+SET(SENDMAV_SOURCE_DIR ${SRC_LIST})
+MESSAGE(STATUS "This is BINARY dir "${SENDMAV_BINARY_DIR})  
+MESSAGE(STATUS "This is SOURCE dir "${SENDMAV_SOURCE_DIR})  
+include_directories(
+)
+ADD_LIBRARY(network SHARED ${SRC_LIST})
