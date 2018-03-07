@@ -9,6 +9,8 @@
 #define NET_ERR(...)	printf(__VA_ARGS__)
 #define NET_DBG(...)
 #endif
+
+#if 0
 /**
  *data dump
  *@param buf_name  -in- the dumped buffer name
@@ -31,7 +33,7 @@ static void data_dump(char *buf_name, char *buffer, int input_len)
 		}
 	}
 }
-
+#endif
 /**
  * chage the char to sockaddr
  *@param buffer -in- the buffer wanted to change
@@ -84,7 +86,7 @@ static int change_char_to_sockaddr(char *buffer, struct sockaddr *sockaddr_buf)
  * The APIs of ifconfig  *
  ************************
 */
-int get_if_dev_name(ifr_name_t *ifr_names, int input_len, unsigned int *dev_nums)
+int get_if_dev_name(ifr_name_t *ifr_names, unsigned int input_len, unsigned int *dev_nums)
 {
 	FILE *fp = NULL;
 	char buffer[4096] = {0};
@@ -93,7 +95,7 @@ int get_if_dev_name(ifr_name_t *ifr_names, int input_len, unsigned int *dev_nums
 	int ret = SUCCESS;
 	int i = 0;
 
-	if(!ifr_names || input_len < (MAX_IF_DEV_NUM * sizeof(ifr_name_t)) || !dev_nums){
+	if(!ifr_names || input_len < (IF_DEV_NUM_MAX * sizeof(ifr_name_t)) || !dev_nums){
 		NET_ERR("%s: Invalided input parameter\n", __func__);
 		ret = ERR_WRONGVALS;
 		goto ERROR0;
@@ -129,15 +131,14 @@ ERROR0:
 	return ret;
 }
 
-int get_ifconfig(struct ifreq *ifrs, int input_len, unsigned int *ifreq_nums)
+int get_ifconfig(struct ifreq *ifrs, unsigned int input_len, unsigned int *ifreq_nums)
 {
 	int sockfd;
 	struct ifconf ifc;
 	int count = 0;
-	char interface_name[32];
 	int ret = SUCCESS;
 
-	if(!ifrs || input_len < (sizeof(struct ifreq) * MAX_IF_DEV_NUM) || !ifreq_nums){
+	if(!ifrs || input_len < (IF_DEV_NUM_MAX * sizeof(struct ifreq)) || !ifreq_nums){
 		NET_DBG("%s:Invalided input parameter\n", __func__);
 		ret = ERR_WRONGVALS;
 		goto ERROR0;
@@ -746,7 +747,7 @@ ERROR0:
  *********************
 */
 
-int get_route_table(libnet_rtentry_t *route_tables, int input_len, unsigned int *rt_table_nums)
+int get_route_table(libnet_rtentry_t *route_tables, unsigned int input_len, unsigned int *rt_table_nums)
 {
 	FILE *fp;
 	char buffer[1024] = {0};
@@ -759,11 +760,10 @@ int get_route_table(libnet_rtentry_t *route_tables, int input_len, unsigned int 
 	char netmask[128] = {0};
 	struct sockaddr netmask_addr;
 	int iflags, metric, refcnt, use, mss, window, irtt;
-	char address[128] = {0};
 	int ret = SUCCESS;
 	int i = 0;
 
-	if(!route_tables || input_len < (MAX_ROUTE_TABLE_NUM * sizeof(libnet_rtentry_t)) || !rt_table_nums){
+	if(!route_tables || input_len < (ROUTE_TABLE_NUM_MAX * sizeof(libnet_rtentry_t)) || !rt_table_nums){
 		NET_DBG("%s: Invalided input parameter\n", __func__);
 		ret = ERR_WRONGVALS;
 		goto ERROR0;
@@ -1216,18 +1216,13 @@ int set_ethtool_ecmd(char *dev_name, uint32_t speed, uint8_t duplex, uint8_t aut
 		ret = ERR_IOCTL;
 		goto ERROR1;
 	}else{
-		if(speed != -1)
-			ethtool_cmd_speed_set(&ecmd, speed);
-		if(duplex != -1)
-			ecmd.duplex = duplex;
-		if(autoneg != -1)
-			ecmd.autoneg = autoneg;
-		if((speed != -1 || duplex != -1) && ecmd.autoneg && ecmd.advertising == 0){
+		ethtool_cmd_speed_set(&ecmd, speed);
+		ecmd.duplex = duplex;
+		ecmd.autoneg = autoneg;
+		if(ecmd.autoneg && ecmd.advertising == 0){
 			NET_DBG("Cannot advertise");
-			if(speed >= 0)
-				NET_DBG("speed  %d\n", speed);
-			if(duplex >= 0)
-				NET_DBG("duplex %s\n", duplex? "full" : "half");
+			NET_DBG("speed  %d\n", speed);
+			NET_DBG("duplex %s\n", duplex? "full" : "half");
 			ret = ERR_WRONGVALS;
 			goto ERROR1;
 		}

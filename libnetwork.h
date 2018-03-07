@@ -18,11 +18,11 @@
 #include <linux/sockios.h>
 #include <arpa/inet.h>
 
-#define NET_DEV_NAME         "/proc/net/dev"
-#define ROUTE_TABLE_DEV_NAME "/proc/net/route"
-#define DEVICE_NAME_LEN      16
-#define MAX_IF_DEV_NUM       128
-#define MAX_ROUTE_TABLE_NUM  128
+#define NET_DEV_NAME          "/proc/net/dev"
+#define ROUTE_TABLE_DEV_NAME  "/proc/net/route"
+#define DEVICE_NAME_LEN_MAX   16
+#define IF_DEV_NUM_MAX     	  128
+#define ROUTE_TABLE_NUM_MAX   128
 
 #ifndef SUCCESS
 #define SUCCESS             (0)
@@ -83,13 +83,13 @@
 
 /*the struct to store the device name*/
 typedef struct {
-    char dev_name[DEVICE_NAME_LEN];
+    char dev_name[DEVICE_NAME_LEN_MAX];
     bool used;
 } ifr_name_t;
 
 /*the struct to store the route table*/
 typedef struct {
-    char dev_name[DEVICE_NAME_LEN];
+    char dev_name[DEVICE_NAME_LEN_MAX];
     bool used;
     struct rtentry route;
 } libnet_rtentry_t;
@@ -107,7 +107,7 @@ typedef struct {
  *@return SUCCESS - get successfully
  *@return ERR_xxx - failed to get
 */
-int get_if_dev_name(ifr_name_t *ifr_names, int input_len, unsigned int *dev_nums);
+int get_if_dev_name(ifr_name_t *ifr_names, unsigned int input_len, unsigned int *dev_nums);
 
 /**
  *get the active ifreqs
@@ -117,7 +117,7 @@ int get_if_dev_name(ifr_name_t *ifr_names, int input_len, unsigned int *dev_nums
  *@return SUCCESS - get successfully
  *@return ERR_xxx - failed to get
 */
-int get_ifconfig(struct ifreq *ifrs, int input_len, unsigned int *ifreq_nums);
+int get_ifconfig(struct ifreq *ifrs, unsigned int input_len, unsigned int *ifreq_nums);
 /**
  *get the ip address of specific device by name
  *@param dev_name -in- the device name point
@@ -238,7 +238,7 @@ int change_if_name(char *old_dev_name, char *new_dev_name);
  *@return SUCCESS - get successfully
  *@return ERR_xxx - failed to get
 */
-int get_route_table(libnet_rtentry_t *route_tables, int input_len, unsigned int *rt_table_nums);
+int get_route_table(libnet_rtentry_t *route_tables, unsigned int input_len, unsigned int *rt_table_nums);
 
 /**
  *add the net route rule
