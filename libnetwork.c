@@ -4,9 +4,11 @@
 
 #ifdef ENABLE_NET_WORK_DBG
 #define NET_ERR(...)	printf(__VA_ARGS__)
+#define NET_WAR(...)	printf(__VA_ARGS__)
 #define NET_DBG(...) 	printf(__VA_ARGS__)
 #else
 #define NET_ERR(...)	printf(__VA_ARGS__)
+#define NET_WAR(...)	printf(__VA_ARGS__)
 #define NET_DBG(...)
 #endif
 
@@ -593,13 +595,7 @@ int set_if_flags(char *dev_name, short int if_flags)
 		goto ERROR0;
 	}
 
-	if(ioctl(sockfd, SIOCGIFFLAGS, &ifr) < 0){
-		NET_ERR("%s: ioctl error errno:%s\n", __func__, strerror(errno));
-		ret = ERR_IOCTL;
-		goto ERROR1;
-	}
-
-	ifr.ifr_flags = ifr.ifr_flags | if_flags;
+	ifr.ifr_flags = if_flags;
 
 	if(ioctl(sockfd, SIOCSIFFLAGS, &ifr) < 0){
 		NET_ERR("%s: ioctl error errno:%s\n", __func__, strerror(errno));
@@ -820,7 +816,7 @@ int add_route_rule(char *dst_type, char *dst_addr, char *netmask_addr, char *gw_
 	struct rtentry route;
 	struct sockaddr_in addr;
 
-	if(!dst_addr || !netmask_addr || !(dev_name || gw_addr)){
+	if(!dst_addr || !(dev_name || gw_addr)){
 		NET_DBG("%s:Invalided input parameter\n", __func__);
 		ret = ERR_WRONGVALS;
 		goto ERROR0;
@@ -828,11 +824,18 @@ int add_route_rule(char *dst_type, char *dst_addr, char *netmask_addr, char *gw_
 
 	memset(&route, 0, sizeof(struct rtentry));
 	/*the route rule is net*/
-	if(!strncmp("net", dst_type, 3))
+	if(!strncmp("net", dst_type, 3)){
 		route.rt_flags = RTF_UP;
+		if(!netmask_addr){
+			NET_DBG("%s:Invalided input parameter\n", __func__);
+			ret = ERR_WRONGVALS;
+			goto ERROR0;
+		}
+	}
 	/*the route rule is host*/
-	if(!strncmp("host", dst_type, 4))
+	if(!strncmp("host", dst_type, 4)){
 		route.rt_flags = RTF_UP | RTF_HOST;
+	}
 
 	/*dst address setting*/
 	memset(&addr, 0, sizeof(struct sockaddr_in));
@@ -870,7 +873,7 @@ int add_route_rule(char *dst_type, char *dst_addr, char *netmask_addr, char *gw_
 
 	memset(&addr, 0, sizeof(struct sockaddr_in));
 	addr.sin_family = AF_INET;
-	if(gw_addr){
+	if(gw_addr && strncmp(gw_addr, "0.0.0.0", strlen("0.0.0.0"))){
 		route.rt_flags = RTF_UP | RTF_GATEWAY;
 		/*gw address setting*/
 		ret = inet_pton(AF_INET, gw_addr, &(addr.sin_addr));
@@ -914,7 +917,7 @@ int del_route_rule(char *dst_type, char *dst_addr, char *netmask_addr, char *gw_
 	struct rtentry route;
 	struct sockaddr_in addr;
 
-	if(!dst_addr || !netmask_addr){
+	if(!dst_addr){
 		NET_DBG("%s:Invalided input parameter\n", __func__);
 		ret = ERR_WRONGVALS;
 		goto ERROR0;
@@ -964,7 +967,7 @@ int del_route_rule(char *dst_type, char *dst_addr, char *netmask_addr, char *gw_
 
 	memset(&addr, 0, sizeof(struct sockaddr_in));
 	addr.sin_family = AF_INET;
-	if(gw_addr){
+	if(gw_addr && strncmp(gw_addr, "0.0.0.0", strlen("0.0.0.0"))){
 		route.rt_flags = RTF_UP | RTF_GATEWAY;
 		/*gw address setting*/
 		ret = inet_pton(AF_INET, gw_addr, &(addr.sin_addr));
@@ -1271,5 +1274,160 @@ int get_ethtool_link(char *dev_name, uint32_t *eth_data)
 ERROR1:
 	close(sockfd);
 ERROR0:
+	return ret;
+}
+
+/**
+ *****************************************
+ *The APIs of to monitor network status *
+ *****************************************
+*/
+void parse_rtattr(struct rtattr **tb, int max, struct rtattr *attr, int len)
+{
+	for (; RTA_OK(attr, len); attr = RTA_NEXT(attr, len)) {
+		if (attr->rta_type <= max) {
+			tb[attr->rta_type] = attr;
+		}
+	}
+}
+
+void print_ifinfomsg(struct nlmsghdr *nh)
+{
+	int len;
+	struct rtattr *tb[IFLA_MAX + 1];
+	struct ifinfomsg *ifinfo;
+
+	memset(tb, 0, sizeof(tb));
+	ifinfo = NLMSG_DATA(nh);
+	len = nh->nlmsg_len - NLMSG_SPACE(sizeof(*ifinfo));
+	parse_rtattr(tb, IFLA_MAX, IFLA_RTA (ifinfo), len);
+	NET_DBG("%s: %s ", (nh->nlmsg_type==RTM_NEWLINK)?"NEWLINK":"DELLINK", (ifinfo->ifi_flags & IFF_RUNNING) ? "up" : "down");
+	if(tb[IFLA_IFNAME]) {
+		NET_ERR("%s", (char *)RTA_DATA(tb[IFLA_IFNAME]));
+	}
+	NET_DBG("\n");
+}
+
+void print_ifaddrmsg(struct nlmsghdr *nh)
+{
+	int len;
+	struct rtattr *tb[IFA_MAX + 1];
+	struct ifaddrmsg *ifaddr;
+	char tmp[256];
+
+	memset(tb, 0, sizeof(tb));
+	ifaddr = NLMSG_DATA(nh);
+	len = nh->nlmsg_len - NLMSG_SPACE(sizeof(*ifaddr));
+	parse_rtattr(tb, IFA_MAX, IFA_RTA (ifaddr), len);
+
+	NET_DBG("%s ", (nh->nlmsg_type==RTM_NEWADDR)?"NEWADDR":"DELADDR");
+	if (tb[IFA_LABEL] != NULL) {
+		NET_DBG("%s ", (char *)RTA_DATA(tb[IFA_LABEL]));
+	}
+	if (tb[IFA_ADDRESS] != NULL) {
+		inet_ntop(ifaddr->ifa_family, RTA_DATA(tb[IFA_ADDRESS]), tmp, sizeof(tmp));
+		NET_DBG("%s ", tmp);
+	}
+	NET_DBG("\n");
+}
+
+void print_rtmsg(struct nlmsghdr *nh)
+{
+	int len;
+	struct rtattr *tb[RTA_MAX + 1];
+	struct rtmsg *rt;
+	char tmp[256];
+
+	memset(tb, 0, sizeof(tb));
+	rt = NLMSG_DATA(nh);
+	len = nh->nlmsg_len - NLMSG_SPACE(sizeof(*rt));
+	parse_rtattr(tb, RTA_MAX, RTM_RTA(rt), len);
+	NET_DBG("%s: ", (nh->nlmsg_type==RTM_NEWROUTE)?"NEWROUT":"DELROUT");
+	if (tb[RTA_DST] != NULL) {
+		inet_ntop(rt->rtm_family, RTA_DATA(tb[RTA_DST]), tmp, sizeof(tmp));
+		NET_DBG("RTA_DST %s ", tmp);
+	}
+	if (tb[RTA_SRC] != NULL) {
+		inet_ntop(rt->rtm_family, RTA_DATA(tb[RTA_SRC]), tmp, sizeof(tmp));
+		NET_DBG("RTA_SRC %s ", tmp);
+	}
+	if (tb[RTA_GATEWAY] != NULL) {
+		inet_ntop(rt->rtm_family, RTA_DATA(tb[RTA_GATEWAY]), tmp, sizeof(tmp));
+		NET_DBG("RTA_GATEWAY %s ", tmp);
+	}
+
+	NET_DBG("\n");
+}
+
+int monitor_network_status(ifinfomsg_fp ifinfomsg_cb, ifaddrmsg_fp ifaddrmsg_cb, rtmsg_fp rtmsg_cb, void *p_ctx)
+{
+	int socketfd;
+	struct sockaddr_nl sa;
+	struct timeval timeout;
+	fd_set rd_set;
+	int select_r;
+	unsigned int read_r;
+	struct nlmsghdr *nh;
+	char buffer[2048] = {0};
+	int ret = SUCCESS;
+
+	socketfd = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+	if(socketfd < 0){
+		NET_ERR("%s: create socketfd failed\n", __func__);
+		ret = ERR_UNKNOWN;
+		goto ERROR0;
+	}
+
+	memset(&sa, 0, sizeof(struct sockaddr_nl));
+	sa.nl_family = AF_NETLINK;
+	sa.nl_groups = RTMGRP_LINK | RTMGRP_IPV4_IFADDR | RTMGRP_IPV4_ROUTE;
+	ret = bind(socketfd, (struct sockaddr *)&sa, sizeof(struct sockaddr));
+	if(ret == -1 ){
+		NET_ERR("%s: bind socketfd failed\n", __func__);
+		ret = ERR_UNKNOWN;
+		goto ERROR1;
+	}
+
+	while(true){
+		FD_ZERO(&rd_set);
+		FD_SET(socketfd, &rd_set);
+		timeout.tv_sec = 15;
+		timeout.tv_usec = 0;
+		select_r = select(socketfd + 1, &rd_set, NULL, NULL, &timeout);
+		if (select_r < 0) {
+			NET_ERR("%s: select error\n", __func__);
+		} else if (select_r > 0) {
+		if (FD_ISSET(socketfd, &rd_set)) {
+			read_r = read(socketfd, buffer, 2048);
+			for (nh = (struct nlmsghdr *)buffer; NLMSG_OK(nh, read_r); nh = NLMSG_NEXT(nh, read_r)){
+				switch (nh->nlmsg_type){
+						case NLMSG_DONE:
+						case NLMSG_ERROR:
+							break;
+						case RTM_NEWLINK:
+						case RTM_DELLINK:
+							ifinfomsg_cb(nh, p_ctx);
+							break;
+						case RTM_NEWADDR:
+						case RTM_DELADDR:
+							ifaddrmsg_cb(nh, p_ctx);
+							break;
+						case RTM_NEWROUTE:
+						case RTM_DELROUTE:
+							rtmsg_cb(nh, p_ctx);
+							break;
+						default:
+							NET_WAR("nh->nlmsg_type = %d\n", nh->nlmsg_type);
+							break;
+					}
+				}
+			}
+		}
+	}
+
+ERROR1:
+	close(socketfd);
+ERROR0:
+
 	return ret;
 }

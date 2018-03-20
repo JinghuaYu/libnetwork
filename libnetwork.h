@@ -16,6 +16,8 @@
 #include <net/route.h>
 #include <linux/ethtool.h>
 #include <linux/sockios.h>
+#include <linux/netlink.h>
+#include <linux/rtnetlink.h>
 #include <arpa/inet.h>
 
 #define NET_DEV_NAME          "/proc/net/dev"
@@ -93,6 +95,10 @@ typedef struct {
     bool used;
     struct rtentry route;
 } libnet_rtentry_t;
+
+typedef int (*ifinfomsg_fp)(struct nlmsghdr *, void *);
+typedef int (*ifaddrmsg_fp)(struct nlmsghdr *, void *);
+typedef int (*rtmsg_fp)(struct nlmsghdr *, void*);
 
 /**
  ************************
