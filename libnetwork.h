@@ -1,24 +1,7 @@
 #ifndef __libnetwork_h__
 #define __libnetwork_h__
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <ctype.h>
-#include <errno.h>
-#include <unistd.h>
-#include <stdbool.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/ioctl.h>
-#include <net/if.h>
-#include <net/if_arp.h>
+
 #include <net/route.h>
-#include <linux/ethtool.h>
-#include <linux/sockios.h>
-#include <linux/netlink.h>
-#include <linux/rtnetlink.h>
-#include <arpa/inet.h>
 
 #define NET_DEV_NAME          "/proc/net/dev"
 #define ROUTE_TABLE_DEV_NAME  "/proc/net/route"

@@ -1,3 +1,22 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <ctype.h>
+#include <errno.h>
+#include <unistd.h>
+#include <stdbool.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/ioctl.h>
+#include <linux/ethtool.h>
+#include <linux/sockios.h>
+#include <linux/netlink.h>
+#include <linux/rtnetlink.h>
+#include <net/if.h>
+#include <net/if_arp.h>
+#include <arpa/inet.h>
+
 #include "libnetwork.h"
 
 //#define ENABLE_NET_WORK_DBG
